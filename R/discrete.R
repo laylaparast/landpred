@@ -30,15 +30,15 @@ Prob.Null <- function(t0, tau, data, weight=NULL, newdata = NULL) {
 	Prob = sum(1 * W2i * (Xi.long <= t0 + tau) * (Xi.long > t0)) /
 	       sum(1 * W2i * (Xi.long > t0))
 
-	data.column = vector(length = dim(data)[1])
-	data.column[data[, 1] <= t0] = NA
-	data.column[data[, 1] > t0] = Prob
-	data = cbind(data, data.column)
+	prob_est = vector(length = dim(data)[1])
+	prob_est[data[, 1] <= t0] = NA
+	prob_est[data[, 1] > t0] = Prob
+	data = cbind(data, prob_est)
     if(!is.null(newdata)) {
-    	newdata.column = vector(length = dim(newdata)[1])
-	    newdata.column[newdata[, 1] <= t0] = NA
-	    newdata.column[newdata[, 1] > t0] = Prob
-		newdata = cbind(newdata, newdata.column)
+    	prob_est = vector(length = dim(newdata)[1])
+	    prob_est[newdata[, 1] <= t0] = NA
+	    prob_est[newdata[, 1] > t0] = Prob
+		newdata = cbind(newdata,prob_est)
     }
 
 	  return(
@@ -340,19 +340,10 @@ VTM<-function(vc, dm){
 #' @return A list containing the estimated Brier Score (AUC.est - note: function name says BS but return says AUC.est, likely BS).
 #' @return A list containing the estimated Brier Score (AUC.est - note: function name says BS but return says AUC.est, likely BS).
 #' @export
-BS.landmark <- function(t0, tau, data, short = TRUE, weight=NULL) {
+BS.landmark <- function(t0, tau, data, weight=NULL) {
 	Xi.long = data[,1]
 	Di.long = data[,2]
-	if(short) {
-		Xi.short = data[,3]
-		Di.short = data[,4]
-		Zi = data[,5]
-		Prob.est = data[,6]
-		}
-	if(!short) {
-		Zi = data[,3]
-		Prob.est = data[,4]
-		}
+	Prob.est = data[,3]
 	if(sum(Xi.long > t0) == 0) {stop("No long term events past the landmark time.")}
 	if(is.null(weight))	{W2i <- Wi.FUN(data = cbind	(Xi.long,Di.long),t0=t0,tau=tau)}
 	else{W2i=weight}
@@ -369,19 +360,10 @@ BS.landmark <- function(t0, tau, data, short = TRUE, weight=NULL) {
 #' @param short Logical.
 #' @param weight Optional weights.
 #' @export
-AUC.landmark <- function(t0, tau, data, short = TRUE, weight=NULL) {
+AUC.landmark <- function(t0, tau, data, weight=NULL) {
 	Xi.long = data[,1]
 	Di.long = data[,2]
-	if(short) {
-		Xi.short = data[,3]
-		Di.short = data[,4]
-		Zi = data[,5]
-		Prob.est = data[,6]
-		}
-	if(!short) {
-		Zi = data[,3]
-		Prob.est = data[,4]
-		}
+	Prob.est = data[,3]
 	if(sum(Xi.long > t0) == 0) {stop("No long term events past the landmark time.")}
 	if(is.null(weight))	{W2i <- Wi.FUN(data = cbind	(Xi.long,Di.long),t0=t0,tau=tau)}
 	else{W2i=weight}
