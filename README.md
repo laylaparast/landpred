@@ -11,4 +11,4 @@ Earlier versions of this package (1.0, 1.1, 1.2) did not include the varying coe
 More information on these methods can be found in Parast et al. (2012, Journal of the American Statistical Association, [doi:10.1080/01621459.2012.721281](https://doi.org/10.1080/01621459.2012.721281), and 
 Parast et al. (2011, Biometrical Journal, [doi:10.1002/bimj.201000150](https://doi.org/10.1002/bimj.201000150)). 
 
-Go here to view a tutorial for this package: [landpred Tutorial](https://htmlpreview.github.io/?https://github.com/laylaparast/landpred/blob/main/landpredtutorial.html). 
+Go here to view a tutorial for this package: [landpred Tutorial](https://htmlpreview.github.io/?https://github.com/laylaparast/landpred/blob/main/landpred_tutorial.html). 
