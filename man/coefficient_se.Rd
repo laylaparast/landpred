@@ -4,12 +4,12 @@
 \alias{coefficient_se}
 \title{Calculate Standard Errors for Coefficients}
 \usage{
-coefficient_se(model, t_s = NULL, samples = 200)
+coefficient_se(model_c, t_s = NULL, samples = 300)
 }
 \arguments{
-\item{model}{A landpred_model_continuous object.}
+\item{model_c}{A landpred_model_continuous object.}
 
-\item{t_s}{The time of the short-term covariate measurement.}
+\item{t_s}{The time of the short-term event.}
 
 \item{samples}{The number of resampling iterations.}
 }
@@ -19,7 +19,7 @@ A named vector of standard errors.
 }
 \description{
 Calculates standard errors for the coefficients of the landpred model.
-If \code{t_s} is provided, it uses the perturbation resampling method.
+If \code{t_s} is provided, it uses the bootstrap.
 Otherwise, it returns the standard errors from the GLM.
 }
 \keyword{internal}

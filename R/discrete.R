@@ -38,7 +38,8 @@ Prob.Null <- function(t0, tau, data, weight=NULL, newdata = NULL) {
     	prob_est = vector(length = dim(newdata)[1])
 	    prob_est[newdata[, 1] <= t0] = NA
 	    prob_est[newdata[, 1] > t0] = Prob
-		newdata = cbind(newdata,prob_est)
+	    Probability = prob_est
+		newdata = cbind(newdata,Probability)
     }
 
 	  return(

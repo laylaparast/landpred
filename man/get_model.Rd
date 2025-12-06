@@ -13,18 +13,14 @@ get_model(landpred_obj, t0, tau, bw = NULL, transform = identity)
 
 \item{tau}{The prediction window.}
 
-\item{bw}{The bandwidth (for continuous models).}
+\item{bw}{The bandwidth.}
 
-\item{transform}{Transformation function (for continuous models).}
+\item{transform}{Transformation function.}
 }
 \value{
-A landpred_model_continuous object.
-
 A landpred_model object (continuous or discrete).
 }
 \description{
-Fits the base GLM (no short covariate info) and creates a landpred model object.
-
 Creates a landpred model object for a specific landmark time and prediction window.
 Dispatches to continuous or discrete model creation based on the landpred object type.
 }

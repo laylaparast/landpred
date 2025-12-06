@@ -18,9 +18,45 @@
 #'
 #' @return A landpred_object.
 #' @export
-landpred <- function(formula, data, discrete=FALSE) {
+landpred <- function(formula, data, discrete=FALSE, no.covariates=FALSE) {
 
-  tf <- terms(formula, specials=c("Surv"))
+  if(no.covariates) {
+  	# Explicitly declare no covariates
+  Z <- NULL
+  x_s <- NULL
+  
+  mf <- model.frame(formula, data)
+ 	tf <- terms(formula, specials=c("Surv"))
+  surv_terms <- attr(tf, "specials")$Surv
+
+
+  x_l <- model.response(mf)
+  response_expr <- attr(tf, "variables")[[attr(tf, "response") + 1]]
+  x_l_name <- deparse(response_expr[[2]])
+
+  # delta for long covariate
+  d_l_name <- deparse(response_expr[[3]])
+
+    names <- list(
+    x_l_name = x_l_name,
+    d_l_name = d_l_name,
+    x_s_name = NULL,
+    d_s_name = NULL,
+    covariates=NULL
+  )
+
+  new_landpred_object(
+    x_l,
+    x_s,
+    Z,
+    names=names,
+    formula = formula,
+    discrete = discrete
+  )
+  }
+  
+  else {
+  	tf <- terms(formula, specials=c("Surv"))
   surv_terms <- attr(tf, "specials")$Surv
 
   # Get survival terms of right by not including the one for response
@@ -29,7 +65,7 @@ landpred <- function(formula, data, discrete=FALSE) {
   # Throw error if more than one short covariate, and get the column of it
   short_cov <- NULL
   if(length(rhs_survival_terms) > 1) {
-    stop("Only a singular short-term covariate can be included.")
+    stop("Only a singular short-term event can be included.")
   } else if(length(rhs_survival_terms) == 1) {
     short_cov = attr(tf, "variables")[[rhs_survival_terms[[1]] + 1]]
     short_cov <- deparse(short_cov)
@@ -55,17 +91,17 @@ landpred <- function(formula, data, discrete=FALSE) {
   }
 
   if(!inherits(x_l, "Surv") || (!is.null(x_s) && !inherits(x_s, "Surv"))) {
-    stop("Response variable and short-term covariate must a survival object.")
+    stop("Response variable and short-term event must a survival object.")
   }
 
   covariates <- attr(tf, "term.labels")
 
   if(length(covariates) == 1 && !is.null(x_s)) {
-    stop("Normal covariate must be provided with short term covariate")
+    stop("A covariate must be provided with the short-term event.")
   }
 
   if(!discrete && is.null(x_s)) {
-    stop("Short term covariate must be provded with multivariate continuous models")
+    stop("Short-term event must be provded with multivariate continuous models")
   }
 
   covariates <- covariates[!(covariates %in% c(short_cov))]
@@ -93,6 +129,7 @@ landpred <- function(formula, data, discrete=FALSE) {
     formula = formula,
     discrete = discrete
   )
+  }
 }
 
 # Create new landpred model
@@ -132,7 +169,7 @@ summary.landpred_object <- function(object, ...) {
   cat("Call get_model() to get time-specific model for t0 + tau\n\n")
   cat("Call:\n")
   cat("landpred(formula = ", deparse(object$formula), ")\n\n", sep="")
-  cat(sprintf("Discrete: %-8s Short Covariate: %-8s N: %s\n", object$discrete, !is.null(object$X_S), length(object$X_L)))
+  cat(sprintf("Discrete: %-8s Short-term Event: %-8s N: %s\n", object$discrete, !is.null(object$X_S), length(object$X_L)))
 }
 
 #' Get Landpred Model (General)
@@ -235,13 +272,13 @@ print.landpred_model_discrete <- function(x, ...) {
   model_prob_formula <- ""
 
   if(old_landpred_result$mode == "no-covariate") {
-    model_name <- "No Discrete covariate + no short covariate"
+    model_name <- "No Discrete covariate + no short-term event"
     model_prob_formula <- "P(TL < t0 + tau)"
   } else if (old_landpred_result$mode == "single-covariate") {
-    model_name <- "Discrete covariate + no short covariate"
+    model_name <- "Discrete covariate + no short-term event"
     model_prob_formula <- "P(TL < t0 + tau|Z=z)"
   } else {
-    model_name <- "Discrete covariate + short covariate"
+    model_name <- "Discrete covariate + short-term event"
     model_prob_formula <- "P(TL < t0 + tau|Z=z,T_s=t_s)"
   }
 
@@ -284,7 +321,7 @@ get_old_landpred_results_discrete <- function(landpred_obj, t0, tau, newdata = N
   )
 
   # Build these dataframes if we have Z and X_S
-  # ts=xs, but i dont feel like changing the naming
+  # ts=xs,
   Z_df <- if (!is.null(Z)) data.frame(Z = Z) else NULL
   ts_df <- if (!is.null(x_s)) {
     data.frame(
@@ -315,16 +352,15 @@ get_old_landpred_results_discrete <- function(landpred_obj, t0, tau, newdata = N
   # Get the result based if we have X_s or Z, etc...
   # Optionally pass in newdata if we do not have it.
   result <- if (is.null(x_s) && is.null(Z)) {
-    do.call(Prob.Null, list(t0, tau, formatted_data,
-                            if (!is.null(newdata_formatted)) list(newdata = newdata_formatted) else list()))
+    do.call(Prob.Null, list(t0, tau, formatted_data, NULL, newdata_formatted))
   } else if (is.null(x_s)) {
     do.call(Prob.Covariate, c(list(
       t0, tau, cbind(formatted_data, Z_df), short = FALSE),
-      if (!is.null(newdata)) list(newdata = cbind(newdata_formatted, newdata_Z_df)) else list()))
+      if (!is.null(newdata)) list(newdata = cbind(newdata_formatted, newdata_Z_df)) else NULL))
   } else {
     do.call(Prob.Covariate.ShortEvent, c(list(
       t0, tau, cbind(formatted_data, ts_df, Z_df)),
-      if (!is.null(newdata)) list(newdata = cbind(newdata_formatted, newdata_ts_df, newdata_Z_df)) else list()))
+      if (!is.null(newdata)) list(newdata = cbind(newdata_formatted, newdata_ts_df, newdata_Z_df)) else NULL))
   }
 
   return(result)

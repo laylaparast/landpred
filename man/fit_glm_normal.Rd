@@ -2,7 +2,7 @@
 % Please edit documentation in R/continuous.R
 \name{fit_glm_normal}
 \alias{fit_glm_normal}
-\title{Fit GLM with Normal Weights (No Short Covariate Info)}
+\title{Fit GLM with Normal Weights (No Short-term Event Info)}
 \usage{
 fit_glm_normal(landpred_obj, t0, tau)
 }

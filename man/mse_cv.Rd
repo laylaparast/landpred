@@ -23,7 +23,7 @@ mse_cv(
 
 \item{tau}{The prediction window.}
 
-\item{transform}{Transformation function for short-term covariate.}
+\item{transform}{Transformation function for short-term event.}
 
 \item{reps}{Number of repetitions.}
 

@@ -2,7 +2,7 @@
 % Please edit documentation in R/continuous.R
 \name{fit_short_glm}
 \alias{fit_short_glm}
-\title{Fit GLM with Kernel Weights (Short Covariate Info)}
+\title{Fit GLM with Kernel Weights (Short-Term Event Info)}
 \usage{
 fit_short_glm(landpred_obj, t0, tau, t_s, bw, transform, indices = NULL)
 }
@@ -13,7 +13,7 @@ fit_short_glm(landpred_obj, t0, tau, t_s, bw, transform, indices = NULL)
 
 \item{tau}{The prediction window.}
 
-\item{t_s}{The time of the short-term covariate measurement.}
+\item{t_s}{The time of the short-term event.}
 
 \item{bw}{The bandwidth for kernel weighting.}
 
@@ -27,7 +27,7 @@ A fitted glm object.
 }
 \description{
 Fits a GLM for the probability of the event occurring before \code{t0 + tau},
-given survival up to \code{t0} and information on a short-term covariate.
-Uses kernel weighting based on the short-term covariate value.
+given survival up to \code{t0} and information on a short-term event.
+Uses kernel weighting based on the short-term event time.
 }
 \keyword{internal}

@@ -9,7 +9,7 @@
 \arguments{
 \item{object}{A landpred_model_continuous object.}
 
-\item{t_s}{Optional short-term covariate time.}
+\item{t_s}{Optional short-term event time.}
 
 \item{...}{Additional arguments.}
 }

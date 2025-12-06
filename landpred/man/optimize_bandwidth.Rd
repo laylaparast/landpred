@@ -26,7 +26,7 @@ optimize_bandwidth(
 
 \item{upper}{Upper bound for bandwidth search.}
 
-\item{transform}{Transformation function for the short-term covariate (e.g., log). Default is identity.}
+\item{transform}{Transformation function for the short-term event (e.g., log). Default is identity.}
 
 \item{reps}{Number of cross-validation repetitions. Default is 50.}
 

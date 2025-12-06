@@ -4,7 +4,7 @@
 \alias{landpred}
 \title{Create a Landpred Object}
 \usage{
-landpred(formula, data, discrete = FALSE)
+landpred(formula, data, discrete = FALSE, no.covariates = FALSE)
 }
 \arguments{
 \item{formula}{A formula object with a Surv object on the LHS and covariates on the RHS.}
@@ -12,6 +12,7 @@ landpred(formula, data, discrete = FALSE)
 \item{data}{The data frame.}
 
 \item{discrete}{Logical, whether to use the discrete method (legacy).}
+\item{no.covariates}{Logical, whether there are covariates or not.}
 }
 \value{
 A landpred_object.
@@ -33,7 +34,7 @@ tau <- 8
 
 # Create a landpred object using the formula interface
 # The formula specifies: Long-term survival ~ Short-term survival + Covariates
-# Note: The short-term covariate must be a Surv object
+# Note: The short-term event must be a Surv object
 obj <- landpred(
   Surv(XL, DL) ~ Surv(XS, DS) + Z,
   data = data_example_landpred,
@@ -41,7 +42,7 @@ obj <- landpred(
 )
 \donttest{
 # 1. Optimize bandwidth (Optional but recommended)
-# This uses cross-validation to find the optimal bandwidth for the short-term covariate
+# This uses cross-validation to find the optimal bandwidth for the short-term event
 # We use log transformation for the time variable as it's often more appropriate
 bw <- optimize_bandwidth(
   landpred_obj = obj,
@@ -65,6 +66,7 @@ model <- get_model(
 )
 
 print(model)
+summary(model,t_s = 1)
 
 # 3. Predict on new data
 # For demonstration, we use the first 10 rows of the original data as "new data"

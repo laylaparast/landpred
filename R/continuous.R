@@ -77,15 +77,6 @@ subset_and_format_df <- function(landpred_obj, indexes, transform=identity) {
   subsetted_data
 }
 
-# Subset of the data used to fit model with no info on short covariate
-get_subset_indexes_noinfo <- function(landpred_obj, t0) {
-  if (!is.null(landpred_obj$X_S)) {
-    subset_indexes <- pmin(landpred_obj$X_L[, "time"], landpred_obj$X_S[, "time"]) > t0
-  } else {
-    subset_indexes <- landpred_obj$X_L[, "time"] > t0
-  }
-  subset_indexes
-}
 
 get_subset_indexes_noinfo <- function(landpred_obj, t0) {
   # Should match old logic: X_L > t0 (not pmin)
@@ -242,177 +233,19 @@ handle_continuous_pred <- function(model, newdata) {
 
     response[X_S == s] <- preds
   }
-
- response
+ X_L <- newdata[, landpred_obj$name[["x_l_name"]], drop=TRUE]
+  response[X_L<t0] <- NA
+  response
 }
 
-# confidence interval for short info model
-# copied from legacy version but with support for any number of covariates
-#' Estimate Variance of Coefficients
-#'
-#' Estimates the variance of the coefficients for the short-term GLM using
-#' a perturbation resampling method.
-#'
-#' @param t The target time for the short-term covariate (usually t_s).
-#' @param data.v The data frame used for estimation.
-#' @param tau The landmark time.
-#' @param s The prediction window.
-#' @param h The bandwidth.
-#' @param vmat A matrix of perturbation weights.
-#' @param Ainv The inverse information matrix from the model fit.
-#' @param weight Optional weights.
-#' @param transform Transformation function.
-#'
-#' @return A list containing the estimated standard errors for the intercept and slopes.
-#' @return A list containing the estimated standard errors for the intercept and slopes.
-#' @keywords internal
-var.fun <- function(t, data.v, tau, s, h, vmat, Ainv, weight = NULL, transform=identity) {
-  length.t <- length(t)
-  size <- nrow(data.v)
-
-  X1i <- data.v[, 1]
-  X2i <- data.v[, 2]
-  D1i <- data.v[, 3]
-  D2i <- data.v[, 4]
-  Zi  <- data.v[, -c(1:4), drop = FALSE]
-
-  index.sub <- which(
-    data.v[, 2] > tau &
-      transform(data.v[, 1]) < transform(tau) &
-      data.v[, 3] == 1
-  )
-
-  # Compute weights
-  if (is.null(weight)) {
-    W2i <- Wi.FUN.CONT(
-      X2i,
-      data = cbind(X2i, D2i, Zi),
-      t0 = tau,
-      tau = s
-    )
-  } else {
-    W2i <- weight
-  }
-
-  # Local estimation at data points for residuals
-  loc.m <- loc.fun.ex.CONT(
-    t   = transform(X1i[index.sub]),
-    data = data.v,
-    tau = tau,
-    s   = s,
-    h   = h,
-    transform = transform
-  )
-
-  # Adjusted vmat
-  vmat.c <- vmat - 1
-
-  # Difference term
-  # Calculate linear predictor row-wise
-  linear_pred <- rowSums(loc.m$est.mat * cbind(1, Zi[index.sub, , drop = FALSE]))
-  
-  diff <- 1 * (X2i > tau & X2i < tau + s & D2i == 1)[index.sub] - g.logit(linear_pred)
-
-  # Remove NA entries
-  valid_idx <- which(!is.na(diff))
-  index.sub <- index.sub[valid_idx]
-  diff <- diff[valid_idx]
-
-  # Kernel
-  K <- Kern.FUN.CONT(transform(X1i[index.sub]), t, h)
-
-  # Piece 1
-  piece.1.int <- t(t(K) * (W2i[index.sub] * diff)) %*% t(vmat.c[, index.sub])
-
-  # Piece 2
-  W2i.star <- apply(
-    vmat,
-    1,
-    Wi.FUN.CONT,
-    tt = X2i,
-    data = cbind(X2i, D2i, Zi),
-    t0 = tau,
-    tau = s
-  )
-
-  piece.2.int <- t(t(K) * diff) %*% (
-    W2i.star[index.sub, ] -
-      matrix(W2i[index.sub],
-             ncol = ncol(W2i.star),
-             nrow = length(index.sub),
-             byrow = FALSE)
-  )
-
-  piece.3.int <- piece.1.int + piece.2.int
-
-  # Number of covariates
-  len.z <- ncol(Zi)
-  total.params <- len.z + 1  # intercept + slopes
-
-  # Build slope matrices
-  if (len.z > 0) {
-    slope.mat <- matrix(nrow = length.t * len.z, ncol = ncol(piece.3.int))
-    for (j in seq_len(len.z)) {
-      piece.1.slope <- t(t(K) * (W2i[index.sub] * Zi[index.sub, j] * diff)) %*% t(vmat.c[, index.sub])
-      piece.2.slope <- t(t(K) * (Zi[index.sub, j] * diff)) %*% (
-        W2i.star[index.sub, ] -
-          matrix(W2i[index.sub],
-                 ncol = ncol(W2i.star),
-                 nrow = length(index.sub),
-                 byrow = FALSE)
-      )
-      slope.mat[((j - 1) * length.t + 1):(j * length.t), ] <- piece.1.slope + piece.2.slope
-    }
-  } else {
-    slope.mat <- matrix(0, nrow = 0, ncol = ncol(piece.3.int))
-  }
-
-  # Output matrices
-  o.matrix <- matrix(NA_real_, nrow = length.t, ncol = total.params)
-  o.entire <- vector("list", total.params)
-  for (i in seq_len(total.params)) {
-    o.entire[[i]] <- matrix(NA_real_, nrow = length.t, ncol = ncol(piece.3.int))
-  }
-
-  # Main computation loop
-  for (l in seq_len(length.t)) {
-    a <- matrix(Ainv[l, ], total.params, total.params)
-
-    for (i in seq_len(total.params)) {
-      o_i <- piece.3.int[l, ] * a[i, 1]
-      if (len.z > 0) {
-        for (j in seq_len(len.z)) {
-          slope_row <- slope.mat[l + length.t * (j - 1), ]
-          o_i <- o_i + slope_row * a[i, j + 1]
-        }
-      }
-      o.entire[[i]][l, ] <- o_i
-      o.matrix[l, i] <- sd(o_i)
-    }
-  }
-
-  sl_mat <-
-      o.matrix[, -1, drop = FALSE]
-
-  out <- list(
-    "int" = o.matrix[, 1],
-    "sl"  = sl_mat
-  )
-
-  for (i in seq_len(total.params)) {
-    out[[paste0("o", i)]] <- o.entire[[i]]
-  }
-
-  return(out)
-}
 
 #' Calculate Standard Errors for Coefficients
 #'
 #' Calculates standard errors for the coefficients of the landpred model.
-#' If \code{t_s} is provided, it uses the perturbation resampling method.
+#' If \code{t_s} is provided, it uses the boostrap.
 #' Otherwise, it returns the standard errors from the GLM.
 #'
-#' @param model A landpred_model_continuous object.
+#' @param model_c A landpred_model_continuous object.
 #' @param t_s The time of the short-term covariate measurement.
 #' @param samples The number of resampling iterations.
 #'
@@ -420,48 +253,59 @@ var.fun <- function(t, data.v, tau, s, h, vmat, Ainv, weight = NULL, transform=i
 #' @return A named vector of standard errors.
 #' @keywords internal
 coefficient_se <-
-  function(model,
+  function(model_c,
            t_s=NULL,
-           samples = 200
+           samples = 300
            ) {
     std_errors <- c()
 
     # If no t_s, use standard errors calculated by glm,
     # otherwise do special pertubation resampling method
-    if (is.null(t_s) || t_s > model$t0) {
-      std_errors <- summary(model$glm_noinfo)$coefficients[, "Std. Error"]
+    if (is.null(t_s) || t_s > model_c$t0) {
+      std_errors <- summary(model_c$glm_noinfo)$coefficients[, "Std. Error"]
       std_errors <- as.numeric(std_errors)
     } else {
-      # legacy formatted data
-      df_formatted <-
-        landpred_to_legacy_data(model$landpred_obj)
+      	    theobject = model_c$landpred_obj
+      		bw <- model_c$bw
+  		
+    		n <- nrow(theobject$X_L)
+     		  
+		hold.coef = c()
+  		for (i in 1:samples) {
+    		ind_train <- sample(1:n, n, replace=TRUE)
+			#subset_train <- ind_train[X_S_status[ind_train] == 1 & 
+                          #    X_S_time[ind_train] < t0 & 
+                           #   X_L_time[ind_train] > t0]
+      
+    		
+    		train_obj <- list(
+      		X_L = theobject$X_L[ind_train, , drop=FALSE],
+      		X_S = theobject$X_S[ind_train, , drop=FALSE],
+      		Z = theobject$Z[ind_train, , drop=FALSE],
+      		names = theobject$names
+    		)
+       		
+    		class(train_obj) <- "landpred_object"
+    
 
-      fit = loc.fun.ex.CONT(
-        t = t_s,
-        data = df_formatted,
-        tau = model$t0,
-        s = model$tau,
-        h = model$bw,
-        transform = model$transform
+      model.boot <- fit_short_glm(
+        landpred_obj = train_obj,
+        t0 = model_c$t0,
+        tau = model_c$tau,
+        t_s = t_s,
+        bw = bw,
+        transform = model_c$transform
       )
+      
+      #t_s here is not necessary because already above but ok
+      hold.coef = rbind(hold.coef, coef(model.boot, t_s))
+		}
+      
+      std_errors <- apply(hold.coef, 2, sd)
 
-     size <- dim(df_formatted)[1]
-     vmat <- matrix(rexp(samples * size, 1), nrow = samples, ncol = size)
-     var_results <- var.fun(
-       t = t_s,
-       data.v = df_formatted,
-       tau = model$t0,
-       s = model$tau,
-       h = model$bw,
-       vmat = vmat,
-       Ainv = fit$invinf,
-       transform = model$transform
-     )
+      	    }
 
-      std_errors <- c(var_results$int, var_results$sl)
-    }
-
-    setNames(std_errors, names(coef(model$glm_noinfo)))
+    setNames(std_errors, names(coef(model_c$glm_noinfo)))
 }
 
 #' Get Landpred Model
@@ -476,13 +320,6 @@ coefficient_se <-
 #'
 #' @return A landpred_model_continuous object.
 #' @export
-get_model <- function(landpred_obj, t0, tau, bw, transform=identity) {
-  glm_noinfo <- fit_glm_normal(landpred_obj, t0, tau)
-  new_landpred_model_continuous(
-    landpred_obj, glm_noinfo, t0, tau, bw,
-    transform
-  )
-}
 
 new_landpred_model_continuous <- function(landpred_obj, glm_noinfo, t0, tau, bw, transform) {
   structure(
@@ -563,7 +400,7 @@ print.landpred_model_continuous <- function(x, ...) {
 summary.landpred_model_continuous <- function(object, t_s = NULL, ...) {
   cat("\nContinuous Landpred Model:\n\n")
 
-  t_s_message <- if (is.null(t_s)) "No short covariate" else sprintf("t_s=%f", t_s)
+  t_s_message <- if (is.null(t_s)) "No short-term event" else sprintf("t_s=%f", t_s)
   cat(sprintf("Coefficients (%s):\n", t_s_message))
 
   # Choose model
@@ -591,25 +428,6 @@ summary.landpred_model_continuous <- function(object, t_s = NULL, ...) {
   cat(sprintf("\nt0: %-10.3f tau: %-10.3f\n", object$t0, object$tau))
 }
 
-landpred_to_legacy_data <- function(landpred_obj) {
-  # Extract components
-  X_L_time <- landpred_obj$X_L[, "time"]
-  X_L_status <- landpred_obj$X_L[, "status"]
-  X_S_time <- landpred_obj$X_S[, "time"]
-  X_S_status <- landpred_obj$X_S[, "status"]
-  Z <- landpred_obj$Z
-
-  # Combine into legacy format: [X1i, X2i, D1i, D2i, Zi...]
-  legacy_data <- cbind(
-    X2i = X_S_time,     # Short covariate time
-    X1i = X_L_time,     # Long covariate time
-    D2i = X_S_status,   # Short covariate status
-    D1i = X_L_status,   # Long covariate status
-    Z                   # Additional covariates
-  )
-
-  return(legacy_data)
-}
 
 # Updated legacy bandwidth selection function using w_i instead of Wi.FUN
 #' @keywords internal
@@ -680,29 +498,6 @@ min_BW_cens_ex <- function(data.cv, tau, s, h) {
     replic[lay, ] = cbind(BW.vec[1], BW.vec[2], BW.vec[3])
   }
   mean(replic, na.rm = TRUE)
-}
-
-# Adapter to use legacy bandwidth selection with new landpred API
-
-# Convert landpred_obj to legacy data format
-landpred_to_legacy_data <- function(landpred_obj) {
-  # Extract components
-  X_L_time <- landpred_obj$X_L[, "time"]
-  X_L_status <- landpred_obj$X_L[, "status"]
-  X_S_time <- landpred_obj$X_S[, "time"]
-  X_S_status <- landpred_obj$X_S[, "status"]
-  Z <- landpred_obj$Z
-
-  # Combine into legacy format: [X1i, X2i, D1i, D2i, Zi...]
-  legacy_data <- cbind(
-    X1i = X_S_time,     # Short covariate time
-    X2i = X_L_time,     # Long covariate time
-    D1i = X_S_status,   # Short covariate status
-    D2i = X_L_status,   # Long covariate status
-    Z                   # Additional covariates
-  )
-
-  return(legacy_data)
 }
 
 
