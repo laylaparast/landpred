@@ -20,9 +20,9 @@ library(landpred)
 
 
 ## Introduction
-This landpred package provides nonparametric models for landmark prediction of long-term survival outcomes, incorporating covariate and short-term event information. The package supports the construction of flexible varying-coefficient models that use discrete covariates, as well as multiple continuous covariates. The goal is to improve prediction accuracy when censored short-term events are available as predictors, using robust nonparametric procedures that don't require correct model specification and avoid restrictive parametric assumptions found in existing multistate survival methods. More information
+This landpred package provides nonparametric methods for landmark prediction of long-term survival outcomes, incorporating covariate and short-term event information. The goal is to improve prediction accuracy when a censored short-term event is available as a predictor, using robust nonparametric procedures that avoid restrictive parametric assumptions found in alternative methods. More information
 on these methods can be found in Parast et al. (2012, Journal of the American Statistical Association, https://doi.org/10.1080/01621459.2012.721281), and 
-Parast et al. (2011, Biometrical Journal, https://doi.org/10.1002/bimj.201000150).
+Parast et al. (2011, Biometrical Journal, https://doi.org/10.1002/bimj.201000150), and Parast and Cai (2013, Statistics in Medicine, http://doi.org/10.1002/sim.5776).
 
 Earlier versions of this package (1.0, 1.1, 1.2) did not include the varying coefficient method. Version 2.0, covered in this tutorial, was developed by [Dylan Huynh](https://baolong281.github.io/) and does include the varying coefficient method and other major improvements in package implementation. 
 
@@ -30,122 +30,213 @@ Earlier versions of this package (1.0, 1.1, 1.2) did not include the varying coe
 ## Generating Data
 
 We will generate a dataframe with two continuous covariates, $Z_1,Z_2$, and one
-discrete covariate, $B$. We will also have a censored short event $X_S$ and a censored
-long event, our outcome, $X_L$. 
+discrete covariate, $B$. We will also have a censored short-term event $X_S$ and a censored
+long-term event, our primary outcome, $X_L$. While there is also an example dataset in the package, it does not have a continuous covariate, hence our generation of this dataset.
 
 
 ```{r}
-n <- 500
+set.seed(1)
+n = 500
 # Generate covariates
-Z1 <- rnorm(n)
-Z2 <- rnorm(n)
-B <- rbinom(n, 1, 0.5)  # Binary discrete covariate
+Z1 = rnorm(n)
+Z2 = rnorm(n)
+B = rbinom(n, 1, 0.5)  # Binary discrete covariate
 
-# Generate event times based on exponential model
-X_L_raw <- rexp(n, rate = exp(-0.5 * Z1 + 0.3 * Z2 + 0.4 * B))
-X_S_raw <- rexp(n, rate = exp(0.2 * Z1 - 0.3 * Z2 - 0.3 * B))
+# Generate event times 
+X_L_raw = exp(0.5 * Z1 + 0.4 * Z2 + 0.5 * B) + rexp(n,1)
+X_S_raw = exp(0.1 * Z1 + 0.2 * Z2 + 0.1 * B) + rexp(n,1)
 
 # Generate censoring times
-C_L <- runif(n, 2, 8)  # censoring for long event
-C_S <- runif(n, 1, 4)  # censoring for short event
+C_L = runif(n, 0.2, 10)  # censoring for long-term event
+C_S = runif(n, 0.1, 5)  # censoring for short-term event
 
 # Apply censoring
-X_L <- pmin(X_L_raw, C_L)
-D_L <- as.numeric(X_L_raw <= C_L)  # 1 if event, 0 if censored
+X_L = pmin(X_L_raw, C_L)
+D_L = as.numeric(X_L_raw <= C_L)  # 1 if event, 0 if censored
 
-X_S <- pmin(X_S_raw, C_S)
-D_S <- as.numeric(X_S_raw <= C_S)  # 1 if event, 0 if censored
+X_S = pmin(X_S_raw, C_S)
+D_S = as.numeric(X_S_raw <= C_S)  # 1 if event, 0 if censored
 
 # Return simple data frame
-df <- data.frame(
-  X_L = X_L,       # long event time
-  D_L = D_L,       # long event indicator
-  X_S = X_S,       # short event time
-  D_S = D_S,       # short event indicator
+df = data.frame(
+  X_L = X_L,       # long-term event time
+  D_L = D_L,       # long-term event indicator
+  X_S = X_S,       # short-term event time
+  D_S = D_S,       # short-term event indicator
   Z1 = Z1,         # continuous covariate 1
   Z2 = Z2,         # continuous covariate 2
   B = B            # discrete covariate
 )
 ```
 
-## Workflow
-
-The package exports the `landpred` function, which will construct a landpred object given a formula and data. 
-We can supply any number of continuous covariates to this, or a singular discrete covariate, as demonstrated below.
-Note that short term information needs to be wrapped in a `Surv` from the `survival` package. 
+Let's take a look at the Kaplan-Meier survival curves for the long-term outcome, the long-term outcome stratified by the discrete covariate, and the short-term outcome. 
 
 ```{r}
 library(survival)
+par(mfrow = c(1, 3), mar = c(4, 4, 2, 1))  
 
-# Create model with continuous covariates and short term information
-obj1 <- landpred(Surv(X_L, D_L) ~ Surv(X_S, D_S) + Z1 + Z2, data=df)
+# --- 1: Long-term, no covariates ---
+fit_L = survfit(Surv(X_L, D_L) ~ 1, data = df)
+plot(fit_L, col = 2, lwd = 2,
+     xlab = "Time", ylab = "Survival Probability",
+     main = "Long-Term (Overall)")
+legend("topright", legend = "Overall", col = 2, lwd = 2, bty = "n")
 
-# Create model with discrete marker and short term information
-# Notice the discrete flag is now enabled, which is false by default.
-obj2 <- landpred(Surv(X_L, D_L) ~ Surv(X_S, D_S) + B, data=df, discrete=TRUE)
+# --- 2: Long-term, by discrete B ---
+fit_L_B = survfit(Surv(X_L, D_L) ~ B, data = df)
+plot(fit_L_B, col = 2:6, lwd = 2,
+     xlab = "Time", ylab = "Survival Probability",
+     main = "Long-Term by B")
+legend("topright", legend = levels(factor(df$B)),
+       col = 2:6, lwd = 2, bty = "n")
 
-# Create model with discrete marker and no short term information
-# Notice the discrete flag is now enabled, which is false by default.
-obj3 <- landpred(Surv(X_L, D_L) ~  B, data=df, discrete=TRUE)
+# --- 3: Short-term, no covariates ---
+fit_S = survfit(Surv(X_S, D_S) ~ 1, data = df)
+plot(fit_S, col = 4, lwd = 2,
+     xlab = "Time", ylab = "Survival Probability",
+     main = "Short-Term (Overall)")
+legend("topright", legend = "Overall", col = 4, lwd = 2, bty = "n")
+
+
 ```
 
-We will proceed with the object with continuous covariates, and short-term information. We can call
-`summary` on this landpred object to get more information from it. Note this landpred object returned by the `landpred` call serves as a baseline object. To get a model for a specific time ande delta, we must call the `get_model` function on this object as specified in the `summary` function.
-Workflows / functions will be the same in the discrete and continuous case. 
+## General Workflow
+
+The package exports the `landpred` function, which will construct a landpred object given a formula and data. 
+We can supply short-term event information, and continuous or discrete covariates, as demonstrated below. Note that short-term event information needs to be wrapped in a `Surv` from the `survival` package.  We can call `summary` on this landpred object to get more information from it. Let's walk through some examples.
+
+## Model Examples
+
+Let's start with a naive prediction model where we use no short-term event or covariate information for prediction. Throughout, we are focused on predicting the probability that `TL<t0+tau` given `TL>t0`. We first set our `t0` and `tau` and then build a prediction model that uses no covariates as shown below.
 
 ```{r}
-summary(obj1)
+t0 = 2
+tau = 1
+
+#model with no information
+model1 = get_model(landpred(Surv(X_L, D_L)~ 1, data=df, discrete=TRUE, no.covariates = TRUE), t0=t0, tau=tau)
+model1
 ```
 
-Our `get_model` function accepts a landpred object as input, and three required parameters, `t0`, `tau`, and `bw`. This returns
-a landmark prediction model for that specific time and delta. For the coefficients and standard errors of the coefficeints, we call `summary`
-on the returned model to get coefficients when no information in the short covariate is provided (has not occured yet). We can also provide `t_s` to this call to get coefficients for if the short event has occured yet.
-
-We must first choose our bandwidth value. We provide a utility to select this optimal value using cross-validation:
+This model is naive in the sense that since it is given no information, it simply uses the overall estimate from the sample. We can obtain predictions and estimate the training Area under the ROC curve (AUC). As expected, the (training) AUC is 0.5. 
 
 ```{r}
-t0 <- 0.5
-tau <- 1.5
-bw <- optimize_bandwidth(obj1, t0=t0, tau=tau, lower=0.01, upper=1, transform=identity)
+#obtain predictions
+probs1 = predict(model1, newdata=df)
+
+#AUC function needs data in this form
+pred_data = cbind(df[, c("X_L", "D_L")],probs1)
+
+#calculate AUC
+AUC.landmark(t0=t0,tau=tau, data = pred_data)
+
+```
+
+Now let's consider only including a single discrete covariate, examine the model and training AUC.
+
+```{r}
+#model with only discrete covariate
+model2 = get_model(landpred(Surv(X_L, D_L) ~  B, data=df, discrete=TRUE), t0=t0, tau=tau)
+model2
+
+#predictions
+probs2 = predict(model2, newdata=df)
+pred_data = cbind(df[, c("X_L", "D_L")],probs2)
+
+#AUC
+AUC.landmark(t0=t0,tau=tau, data = pred_data)
+
+```
+And now let's consider the discrete covariate and the short-term event information. 
+
+```{r}
+model3 = get_model(landpred(Surv(X_L, D_L) ~ Surv(X_S, D_S) + B, data=df, discrete=TRUE), t0=t0, tau=tau)
+probs3 = predict(model3, newdata=df)
+pred_data = cbind(df[, c("X_L", "D_L")],probs3)
+
+#AUC
+AUC.landmark(t0=t0,tau=tau, data = pred_data)
+
+```
+Next, let's consider both continuous covariates and the short-term event information. In addition, we showcase our function to optimize the bandwidth using cross-validation.
+
+```{r}
+# create model
+obj1 = landpred(Surv(X_L, D_L) ~ Surv(X_S, D_S) + Z1 + Z2, data=df)
+
+#find bandwidth
+bw = optimize_bandwidth(obj1, t0=t0, tau=tau, lower=0.01, upper=1)
+
 bw
+# Get model using the optimized bandwidth
+model = get_model(obj1, t0=t0, tau=tau, bw=bw, transform=identity)
+
+model
+
 ```
 
-The optimal bandwidth is `r round(bw, 3)`, which controls the smoothness of the local regression used to incorporate short-term event information. A smaller bandwidth gives more weight to nearby observations, while a larger bandwidth smooths over more data points.
+With one or more continuous covariates, the model becomes more complicated and involves a varying coefficient model. The coefficients for each covariate vary as a function of the short-term event. First, we can look at the coefficients for each covariate when a short-term event has not occurred by time `t0` as follows. 
 
- 
 ```{r}
-# Get model using the optimized bandwidth
-model <- get_model(obj1, t0=t0, tau=tau, bw=bw, transform=identity)
-
-# Summary with no short covariate information
 summary(model)
 ```
 
-The model summary shows coefficients for predicting survival beyond time `t0 + tau`, given survival to the landmark time `t0 = 0.5`.
-Calling summary without `t_s` returns the coefficients for the model when no short event information is provided.
+
+To view the covariate coefficients for a specific time of the short-term event, for example at 0.3, we can use the summary function as follows: 
 
 ```{r}
-# Summary with short covariate information (if short event occurred at time 0.3)
 summary(model, t_s=0.3)
 ```
 
-When we condition on the short event occurring at a specific time (here 0.3), the model provides locally-weighted coefficients that incorporate this timing information for more accurate predictions.
+These estimates are the locally-weighted coefficients from the varying coefficient model.
 
 ## Prediction
 
-We can also do prediction with this model to get survival probabilities for a given observation:
+Let's take a closer look at the predictions from this model. Note that if a person does not survive past the t0 time, their landmark prediction is undefined and is shown as NA.
 
 ```{r}
-probs <- predict(model, newdata=df[1:5, , drop=FALSE])
+#first 10 observations
+df[1:10, , drop=FALSE]
+
+#predictions for first 10 observations
+probs = predict(model, newdata=df[1:10, , drop=FALSE])
 probs
 ```
 
-These probabilities represent the estimated risk of the long-term event occurring by time `t0 + tau`, conditional on surviving to the landmark time `t0`. Higher values indicate greater risk.
-Here, newdata is a dataframe also containing the short event information for each observation. If this short event time is less than
-the value of `t_0`, then the short event time is incorporated into the probability, giving 
-`P(X_L > t_0 + tau | X=x, X_s=t_s)`. If the short event time is greater than `t_0`, then the short event time is not incorporated into the probability, giving instead
-`P(X_L > t_0 + tau | X=x)`. 
+These probabilities represent the estimated probability of the long-term event occurring by time `t0 + tau`, conditional on survival to the landmark time `t0`. Here, newdata is a dataframe also containing the short event information for each observation. If this short event time is less than
+the value of `t_0`, then the short-term event time is incorporated into the probability, giving 
+`P(X_L < t_0 + tau | Z=z, X_s=t_s)`. If the short-term event time is greater than `t_0`, then the short-term event time is not incorporated into the probability, giving instead
+`P(X_L < t_0 + tau | Z=z)`. 
 
-That's all for now!
+We can evaluate the prediction accuracy by calculating the Area under the ROC Curve (AUC), as above (or the Brier Score). Let's properly look at the AUC using a training and a validation set. 
+
+```{r}
+n = nrow(df)
+set.seed(1)
+train_prop = 0.6
+n_train = floor(n * train_prop)
+
+#create training and validation sets
+ind_train = sample(1:n, n_train)
+ind_val = setdiff(1:n, ind_train)
+df_train = df[ind_train,]
+df_val = df[ind_val,]
+
+#fit the model above to only the training data;
+#find bandwidth
+obj1 = landpred(Surv(X_L, D_L) ~ Surv(X_S, D_S) + Z1 + Z2, data=df_train)
+bw = optimize_bandwidth(obj1, t0=t0, tau=tau, lower=0.01, upper=1)
+model1 = get_model(obj1, t0=t0, tau=tau, bw=bw)
+
+#get predictions for validation set
+probs1 = predict(model1, newdata=df_val)
+
+#calculate AUC
+pred_data = cbind(df_val[, c("X_L", "D_L")],probs1)
+AUC.landmark(t0=t0,tau=tau, data = pred_data)
+
+```
+
+That's all for now! If you have any questions or need any help, please email: parast\@austin.utexas.edu.
 
 ---------

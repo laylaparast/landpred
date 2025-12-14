@@ -37,7 +37,7 @@ out = Prob.Null(t0=t0,tau=tau,data=data_example_landpred)
 #get data with predictions
 data_pred = out$data
 
-#calculate AUC
+#calculate training AUC
 AUC.landmark(t0=t0,tau=tau, data = data_pred[,c("XL","DL","prob_est")])
 
 }
