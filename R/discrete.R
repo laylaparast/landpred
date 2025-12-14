@@ -132,7 +132,7 @@ Prob.Covariate <- function(t0, tau, data, weight=NULL, short=TRUE, newdata = NUL
 	  covariate.results[j, 1] = zi.cat[j]
 	  c = zi.cat[j]
 	  if (sum(Zi == c) < 10) {
-	    print(paste("Warning: Very few individuals with covariate value = ", c))
+	    warning(paste("Warning: Very few individuals with covariate value = ", c))
 	  }
 	  covariate.results[j, 2] = sum(1 * (Zi == c) * W2i * (Xi.long <= t0 + tau) * (Xi.long > t0)) /
 	                            sum(1 * (Zi == c) * W2i * (Xi.long > t0))
@@ -207,9 +207,9 @@ Prob.Covariate.ShortEvent <- function(t0, tau, data, weight=NULL, bandwidth = NU
 	data.column[data[,1] <= t0] = NA
 	for(j in 1:length(zi.cat)) {
 		c = zi.cat[j]
-		if(sum(Zi==c) < 10) {print(paste("Warning: Very few individuals with covariate value = ",c))}
-		if(sum(data[,1] > t0 & data[,3]<log(t0) & data[,5] == c) < 50) {print("Warning: Smoothing over very few short term events")}
-		if(sum(data[,1] > t0 & data[,3]>=log(t0) & data[,5] == c) < 10) {print(paste("Warning: Very few individuals with short term event past t0 and with covariate value = ",c))}
+		if(sum(Zi==c) < 10) {warning(paste("Warning: Very few individuals with covariate value = ",c))}
+		if(sum(data[,1] > t0 & data[,3]<log(t0) & data[,5] == c) < 50) {warning("Warning: Smoothing over very few short term events")}
+		if(sum(data[,1] > t0 & data[,3]>=log(t0) & data[,5] == c) < 10) {warning(paste("Warning: Very few individuals with short term event past t0 and with covariate value = ",c))}
 		short.ind = (data[,1] > t0 & data[,3]<log(t0) & data[,5] == c)
 		Pr.2.t = Prob2.k.t(t=Xi.short[short.ind], t0=t0, tau=tau,data.use=data,bandwidth=bandwidth,covariate.value=c)
 		data.column[short.ind] = Pr.2.t
